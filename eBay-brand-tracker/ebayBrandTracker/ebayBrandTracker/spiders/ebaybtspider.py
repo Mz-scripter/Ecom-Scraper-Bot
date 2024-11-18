@@ -50,7 +50,7 @@ class EbaybtspiderSpider(scrapy.Spider):
             yield scrapy.Request(url=next_page, callback=self.parse, meta={'brand': brand},)
     
     def parse_item_page(self, response):
-        price = response.css('span.ux-textspans').get()
+        price = response.css('span.ux-textspans::text').get()
         title = response.meta['title']
         link = response.meta['link']
         brand = response.meta['brand']
