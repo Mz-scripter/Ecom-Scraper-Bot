@@ -33,15 +33,13 @@ class EbaybtspiderSpider(scrapy.Spider):
             price = item.css('span.s-item__price::text').get()
             link = item.css('a.s-item__link::attr(href)').get()
 
-            # Match brand in title as before
-            if brand.lower() in (title or "").lower():
-                # yield {
-                #     'brand': brand,
-                #     'title': title,
-                #     'price': price,
-                #     'link': link
-                # }
-                self.send_discord_notification(brand, title, price, link)
+            # If price is None, follow the item's link to fetch the price
+            if price is None and link:
+                yield scrapy.Request(url=link, callback=self.parse_item_page, meta={'title': title, 'link': link, 'brand': brand})
+            else:
+                # Match brand in title as before
+                if brand.lower() in (title or "").lower():
+                    self.send_discord_notification(brand, title, price, link)
         
         # Check if there is a next page and follow it
         next_page = response.css('a.pagination__next::attr(href)').get()
@@ -50,6 +48,14 @@ class EbaybtspiderSpider(scrapy.Spider):
                 'User-Agent': self.ua.random
             }
             yield scrapy.Request(url=next_page, callback=self.parse, meta={'brand': brand},)
+    
+    def parse_item_page(self, response):
+        price = response.css('span.ux-textspans').get()
+        title = response.meta['title']
+        link = response.meta['link']
+        brand = response.meta['brand']
+
+        self.send_discord_notification(brand, title, price, link)
     
     def send_discord_notification(self, brand, title, price, link):
         # Prepare to send the message to discord
@@ -67,7 +73,6 @@ class EbaybtspiderSpider(scrapy.Spider):
             self.log(f"Notification sent successfully for {title}")
         
         elif response.status_code == 429:
-            # retry_after = int(response.headers.get('Retry-After', 5)) # Default to 5 seconds if not provided
             retry_after = 10
             self.log(f"Rate limit hit. Retrying after {retry_after} seconds...")
             time.sleep(retry_after)
